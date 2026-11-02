@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOREAL ENGMED — SISTEMA INTEGRADO DE GESTÃO, VENDAS E PRODUÇÃO</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Supabase JS Client V2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        
+        /* Tipografia oficial para o modelo de Proposta Comercial e Ofícios */
+        .doc-cambria {
+            font-family: 'Cambria', Georgia, serif;
+            font-size: 10pt;
+            line-height: 1.0;
+            text-align: justify;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Estilo para campos restritos de Faturação/NF do Gestor (tom marrom claro) */
+        .gestor-sigilo-bg {
+            background-color: #f5ebe0 !important;
+            border-color: #d5bdaf !important;
+            color: #4a3b32 !important;
+        }
+
+        input[type="text"], textarea, select {
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- CABEÇALHO PRINCIPAL E NAVEGAÇÃO -->
+    <header class="bg-slate-900 text-white shadow-xl sticky top-0 z-40 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-amber-500 text-slate-950 font-black text-xl px-2.5 py-0.5 rounded shadow">B</div>
+                <div>
+                    <h1 class="font-black text-base md:text-lg tracking-wider uppercase leading-none flex items-center gap-2">
+                        BOREAL ENGMED <span class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold">GESTÃO INTEGRADA</span>
+                    </h1>
+                    <p class="text-[10px] text-slate-400 font-semibold tracking-wide mt-0.5">VENDAS, CONTRATOS, PRODUÇÃO E FATURAÇÃO</p>
+                </div>
+            </div>
+
+            <!-- CONTROLO DE PERFIL E SELEÇÃO DE CLIENTE/PROCESSO -->
+            <div class="flex items-center space-x-3 text-xs">
+                <!-- Seletor de Perfil do Supabase -->
+                <div class="bg-slate-800 px-2.5 py-1 rounded border border-slate-700 flex items-center gap-1.5">
+                    <span class="text-slate-400 font-bold">PERFIL:</span>
+                    <span id="label-user-role" class="font-extrabold text-amber-400 uppercase">GESTOR MASTER</span>
+                </div>
+
+                <!-- Dropdown de Acesso Rápido a Clientes e Contratos -->
+                <div class="bg-slate-800 px-2.5 py-1 rounded border border-slate-700 flex items-center gap-1.5">
+                    <span class="text-blue-400 font-bold">PROCESSO:</span>
+                    <select id="select-global-processo-cliente" onchange="carregarProcessoClienteUnico(this.value)" class="bg-slate-900 text-white font-bold rounded p-1 border border-slate-600 focus:outline-none">
+                        <option value="">-- SELECIONAR CLIENTE / CONTRATO --</option>
+                        <option value="PREFEITURA_01">PREFEITURA MUNICIPAL - GESTÃO PCMSO</option>
+                        <option value="PREFEITURA_02">PREFEITURA MUNICIPAL - LAUDO ERGONÓMICO</option>
+                        <option value="INDUSTRIA_METAL">INDÚSTRIA METALÚRGICA - ASO & EXAMES</option>
+                    </select>
+                </div>
+
+                <button onclick="realizarLogout()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-2 py-1 rounded transition">
+                    SAIR
+                </button>
+            </div>
+        </div>
+
+        <!-- BARRA DE MÓDULOS COM ÍCONES E TEXTO EM MAIÚSCULAS -->
+        <nav class="bg-slate-950 px-4 py-1.5 overflow-x-auto border-t border-slate-800">
+            <div class="max-w-7xl mx-auto flex items-center space-x-2 text-[11px] font-black uppercase whitespace-nowrap">
+                <button onclick="switchTab('vendas')" id="btn-tab-vendas" class="nav-btn bg-blue-700 text-white px-3 py-1.5 rounded flex items-center gap-1.5">
+                    <i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> 1. MÓDULO DE VENDAS & IA
+                </button>
+                <button onclick="switchTab('proposta')" id="btn-tab-proposta" class="nav-btn text-slate-300 hover:text-white px-3 py-1.5 rounded flex items-center gap-1.5">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> 2. MÓDULO PROPOSTA COMERCIAL
+                </button>
+                <button onclick="switchTab('processo-geral')" id="btn-tab-processo-geral" class="nav-btn text-slate-300 hover:text-white px-3 py-1.5 rounded flex items-center gap-1.5">
+                    <i data-lucide="layers" class="w-3.5 h-3.5"></i> 3. MÓDULO PROCESSO GERAL (CLIENTE ÚNICO)
+                </button>
+                <button onclick="switchTab('relatorio-comercial')" id="btn-tab-relatorio-comercial" class="nav-btn text-slate-300 hover:text-white px-3 py-1.5 rounded flex items-center gap-1.5">
+                    <i data-lucide="table-properties" class="w-3.5 h-3.5"></i> 4. RELATÓRIO COMERCIAL (CASCATA)
+                </button>
+                <button onclick="switchTab('oficios')" id="btn-tab-oficios" class="nav-btn text-slate-300 hover:text-white px-3 py-1.5 rounded flex items-center gap-1.5">
+                    <i data-lucide="mail" class="w-3.5 h-3.5"></i> 5. MÓDULO DE OFÍCIOS
+                </button>
+                <button onclick="switchTab('cotacao-publica')" id="btn-tab-cotacao-publica" class="nav-btn text-amber-400 hover:text-amber-300 px-3 py-1.5 rounded flex items-center gap-1.5">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> 6. ENTRADA EXTERNA COTAÇÃO
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ÁREA PRINCIPAL DOS CONTEÚDOS -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+
+        <!-- ========================================================================= -->
+        <!-- MÓDULO 1: VENDAS, CAPTURA PNCP E FORMAÇÃO DE PREÇO COM IA                -->
+        <!-- ========================================================================= -->
+        <section id="tab-vendas" class="tab-pane space-y-4">
+            <!-- Painel de Captura e Upload -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center border-b pb-3 gap-2">
+                    <div>
+                        <h2 class="font-black text-sm md:text-base uppercase flex items-center gap-2 text-slate-900">
+                            <i data-lucide="scan-line" class="w-5 h-5 text-blue-700"></i> ENTRADA DE PROPOSTAS & CAPTURA PNCP / EDITAIS
+                        </h2>
+                        <p class="text-xs text-slate-500 font-medium">Anexe editais em PDF/Word ou importe diretamente do Portal Nacional de Contratações Públicas.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="capturarEditaisPNCP()" class="bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                            <i data-lucide="download-cloud" class="w-4 h-4"></i> CAPTAR PNCP FEDERAL
+                        </button>
+                        <label class="bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs px-3 py-1.5 rounded cursor-pointer flex items-center gap-1 shadow">
+                            <i data-lucide="upload" class="w-4 h-4"></i> ANEXAR EDITAL / TR (IA LEITURA)
+                            <input type="file" id="upload-edital-vendas" accept=".pdf,.docx,.doc,image/*" class="hidden" onchange="processarArquivoPorIA(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Formulário Base da Organização / Processo -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                    <div class="md:col-span-2 relative">
+                        <label class="font-bold text-slate-700 block mb-0.5">ORGANIZAÇÃO / ÓRGÃO COMPRADOR *</label>
+                        <div class="flex items-center">
+                            <input type="text" id="venda_org_nome" placeholder="EX: PREFEITURA MUNICIPAL" class="w-full border p-1.5 rounded font-bold bg-white">
+                            <button onclick="ativarGravacaoVoz('venda_org_nome')" type="button" class="ml-1 p-1.5 text-slate-500 hover:text-blue-700" title="Entrada por Voz">
+                                <i data-lucide="mic" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">CNPJ *</label>
+                        <input type="text" id="venda_org_cnpj" placeholder="00.000.000/0001-00" class="w-full border p-1.5 rounded font-bold bg-white">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">Nº DA LICITAÇÃO / EDITAL</label>
+                        <input type="text" id="venda_num_licitacao" placeholder="EX: PREGÃO 045/2026" class="w-full border p-1.5 rounded font-bold bg-white">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="font-bold text-slate-700 block mb-0.5">ENDEREÇO COMPLETO (BASE PARA A IA ESTIMAR PREÇO REGIONAL) *</label>
+                        <input type="text" id="venda_endereco" placeholder="CIDADE, BAIRRO, UF" class="w-full border p-1.5 rounded font-semibold bg-white">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">TELEFONE / WHATSAPP</label>
+                        <input type="text" id="venda_telefone" placeholder="(00) 00000-0000" class="w-full border p-1.5 rounded bg-white">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">E-MAIL DO CONTATO</label>
+                        <input type="email" id="venda_email" placeholder="compras@orgao.gov.br" class="w-full border p-1.5 rounded bg-white">
+                    </div>
+                </div>
+
+                <!-- Tabela de Matriz de Itens / Precificação com Ajuste da IA -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="font-extrabold text-xs text-slate-900 uppercase">MATRIZ DE ITENS, QUANTIDADES E PREÇO REGIONAL (IA):</span>
+                        
+                        <!-- Ajuste por Fator Multiplicador ou Divisor -->
+                        <div class="flex items-center gap-2 bg-amber-50 border border-amber-300 px-3 py-1 rounded text-xs">
+                            <span class="font-bold text-amber-950 uppercase">FATOR DE AJUSTE MANUAL:</span>
+                            <select id="venda_operador_fator" class="border font-bold bg-white p-0.5 rounded text-xs">
+                                <option value="MULT">MULTIPLICAR (X)</option>
+                                <option value="DIV">DIVIDIR (/)</option>
+                            </select>
+                            <input type="number" step="0.01" id="venda_valor_fator" value="1.00" class="w-16 border p-0.5 rounded text-center font-bold bg-white">
+                            <button onclick="aplicarFatorManual()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-0.5 rounded text-[10px] uppercase">
+                                APLICAR
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-800 text-white font-bold uppercase">
+                                    <th class="p-2 w-12 text-center">ITEM</th>
+                                    <th class="p-2">DESCRIÇÃO DO OBJETO</th>
+                                    <th class="p-2 text-center w-24">QUANT.</th>
+                                    <th class="p-2 text-center w-28">UNIDADE</th>
+                                    <th class="p-2 text-center w-32">VALOR UNIT. (R$)</th>
+                                    <th class="p-2 text-center w-36">VALOR TOTAL (R$)</th>
+                                    <th class="p-2 text-center w-16">AÇÕES</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-itens-vendas-tbody" class="divide-y divide-slate-200 bg-white">
+                                <tr>
+                                    <td class="p-2 text-center font-bold">1</td>
+                                    <td class="p-2"><input type="text" class="w-full border p-1 rounded font-semibold" value="ELABORAÇÃO DE PCMSO E GESTÃO OCUPACIONAL NR-07"></td>
+                                    <td class="p-2 text-center"><input type="number" class="w-20 border p-1 text-center font-bold" value="12"></td>
+                                    <td class="p-2 text-center">
+                                        <select class="border p-1 rounded font-bold">
+                                            <option value="MÊS">MÊS</option>
+                                            <option value="UNIDADE">UNIDADE</option>
+                                            <option value="HORA">HORA</option>
+                                            <option value="DIA">DIA</option>
+                                            <option value="EXAME">EXAME</option>
+                                        </select>
+                                    </td>
+                                    <td class="p-2 text-center"><input type="text" class="w-28 border p-1 text-center font-bold text-blue-900" value="1.850,00"></td>
+                                    <td class="p-2 text-center font-black text-emerald-700">R$ 22.200,00</td>
+                                    <td class="p-2 text-center"><button class="text-red-600 font-bold">✕</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-2">
+                        <button onclick="adicionarLinhaItemVenda()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> ADICIONAR NOVO ITEM
+                        </button>
+                        <div class="text-right">
+                            <span class="text-xs font-bold text-slate-500 uppercase">VALOR GLOBAL ESTIMADO:</span>
+                            <span id="venda-valor-global-lbl" class="text-lg font-black text-emerald-700 ml-2">R$ 22.200,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Barra de Status do Processo Licitatório -->
+                <div class="p-3.5 bg-blue-50 border border-blue-200 rounded-lg flex flex-wrap justify-between items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-blue-950 uppercase">STATUS DO PROCESSO:</span>
+                        <select id="venda_status_processo" onchange="verificarStatusProcesso(this.value)" class="border border-blue-400 bg-white font-extrabold text-xs p-1.5 rounded shadow-sm">
+                            <option value="VENCEDOR_HOMOLOGACAO">VENCEDOR AGUARDANDO HOMOLOGAÇÃO</option>
+                            <option value="VENCEDOR_RECURSO">VENCEDOR AGUARDANDO RECURSO</option>
+                            <option value="HOMOLOGADO_CONTRATO">HOMOLOGADO AGUARDANDO CONTRATO</option>
+                            <option value="CONTRATADO_EMPENHO">CONTRATADO AGUARDANDO EMPENHO</option>
+                            <option value="EMPENHADO_OS">EMPENHADO AGUARDANDO ORDEM DE SERVIÇO</option>
+                            <option value="SERVICO_INICIADO">SERVIÇO INICIADO</option>
+                            <option value="SEM_EXITO">SEM ÊXITO</option>
+                            <option value="REVOGADO">REVOGADO</option>
+                        </select>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <!-- Botão Apagar: ativado apenas se for Sem Êxito -->
+                        <button id="btn-apagar-processo" onclick="removerProcessoVenda()" class="hidden bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-3 py-1.5 rounded uppercase shadow">
+                            🗑️ APAGAR PROCESSO
+                        </button>
+                        <button onclick="gerarPropostaDireta()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-4 py-1.5 rounded uppercase shadow flex items-center gap-1.5">
+                            <i data-lucide="file-check-2" class="w-4 h-4"></i> CONVERTER EM PROPOSTA COMERCIAL
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- MÓDULO 2: PROPOSTA COMERCIAL (LAYOUT OFICIAL BOREAL CAMBRIA 10PT)         -->
+        <!-- ========================================================================= -->
+        <section id="tab-proposta" class="tab-pane hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl border shadow-sm flex justify-between items-center">
+                <div>
+                    <h2 class="font-black text-sm uppercase text-slate-900 flex items-center gap-2">
+                        <i data-lucide="file-badge" class="w-5 h-5 text-blue-800"></i> DOCUMENTO FORMAL: PROPOSTA COMERCIAL BOREAL ENGMED
+                    </h2>
+                    <p class="text-xs text-slate-500 font-medium">Layout rigoroso em tipografia Cambria 10pt, justificado e entrelinhas simples.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="exportarPropostaWord()" class="bg-blue-800 hover:bg-blue-900 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                        <i data-lucide="download" class="w-4 h-4"></i> BAIXAR EM WORD (.DOCX)
+                    </button>
+                    <button onclick="window.print()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                        <i data-lucide="printer" class="w-4 h-4"></i> GERAR PDF PARA ASSINATURA
+                    </button>
+                </div>
+            </div>
+
+            <!-- Folha A4 Simulação Visual da Proposta -->
+            <div class="bg-white border-2 border-slate-300 shadow-2xl p-8 max-w-4xl mx-auto doc-cambria space-y-4 text-slate-950">
+                <!-- Cabeçalho Oficial com Logótipo -->
+                <div class="border-b-2 border-slate-900 pb-2 flex justify-between items-center">
+                    <div>
+                        <strong class="text-base uppercase font-black text-blue-950 block">BOREAL ENGENHARIA E MEDICINA DO TRABALHO LTDA</strong>
+                        <span class="text-[11px] font-semibold text-slate-600">CNPJ: 00.000.000/0001-00 | CRM PJ: 1011385</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-bold block uppercase">PROPOSTA COMERCIAL Nº <span id="prop_doc_numero">089/2026</span></span>
+                        <span class="text-[11px] text-slate-500 font-semibold" id="prop_doc_data">Paulínia-SP, 01 de Novembro de 2026</span>
+                    </div>
+                </div>
+
+                <div>
+                    <p><strong>À:</strong> <span id="prop_doc_destinatario" class="font-bold">PREFEITURA MUNICIPAL DE EXEMPLO</span></p>
+                    <p><strong>AT.:</strong> COMISSÃO DE CONTRATAÇÃO / DEPARTAMENTO DE COMPRAS E LICITAÇÕES</p>
+                    <p><strong>REF.:</strong> PRESTAÇÃO DE SERVIÇOS EM MEDICINA E SEGURANÇA DO TRABALHO</p>
+                </div>
+
+                <p>
+                    A <strong>BOREAL ENGENHARIA E MEDICINA DO TRABALHO LTDA</strong>, pessoa jurídica de direito privado, submete à apreciação de V. Sa. a nossa proposta comercial e técnica para atendimento às necessidades especificadas, declarando pleno conhecimento e aceitação das condições estabelecidas no termo de referência.
+                </p>
+
+                <!-- Tabela de Preços Formatada -->
+                <table class="w-full border-collapse border border-slate-900 text-[10pt] my-2">
+                    <thead>
+                        <tr class="bg-slate-100 border-b border-slate-900 font-bold text-center">
+                            <th class="border border-slate-900 p-1 w-12">ITEM</th>
+                            <th class="border border-slate-900 p-1 text-left">DESCRIÇÃO DOS SERVIÇOS / OBJETOS</th>
+                            <th class="border border-slate-900 p-1 w-16">QTD</th>
+                            <th class="border border-slate-900 p-1 w-20">UNID.</th>
+                            <th class="border border-slate-900 p-1 w-28">VALOR UNIT.</th>
+                            <th class="border border-slate-900 p-1 w-32">VALOR TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prop_tabela_corpo">
+                        <tr>
+                            <td class="border border-slate-900 p-1 text-center font-bold">01</td>
+                            <td class="border border-slate-900 p-1">Gestão Completa do PCMSO e Emissão de Atestados de Saúde Ocupacional</td>
+                            <td class="border border-slate-900 p-1 text-center font-bold">12</td>
+                            <td class="border border-slate-900 p-1 text-center font-bold">MÊS</td>
+                            <td class="border border-slate-900 p-1 text-right font-bold">R$ 1.850,00</td>
+                            <td class="border border-slate-900 p-1 text-right font-bold">R$ 22.200,00</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-slate-100 font-black">
+                            <td colspan="5" class="border border-slate-900 p-1.5 text-right uppercase">VALOR GLOBAL DA PROPOSTA:</td>
+                            <td id="prop_doc_total_global" class="border border-slate-900 p-1.5 text-right font-black">R$ 22.200,00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <p>
+                    <strong>VALOR GLOBAL POR EXTENSO:</strong> <span id="prop_doc_extenso" class="font-bold underline">Vinte e dois mil e duzentos reais</span>.
+                </p>
+
+                <div class="space-y-1">
+                    <p><strong>CONDIÇÕES GERAIS DA PROPOSTA:</strong></p>
+                    <p>• <strong>Prazo de Validade da Proposta:</strong> 60 (sessenta) dias a contar da presente data.</p>
+                    <p>• <strong>Prazo de Início dos Serviços:</strong> Imediato após a assinatura do contrato ou recebimento da Ordem de Serviço.</p>
+                    <p>• <strong>Regime Tributário:</strong> Todos os tributos e encargos trabalhistas estão inclusos na presente cotação.</p>
+                </div>
+
+                <div class="pt-8 text-center space-y-1">
+                    <div class="w-64 border-b border-slate-900 mx-auto"></div>
+                    <strong class="block font-bold">BOREAL ENGENHARIA E MEDICINA DO TRABALHO LTDA</strong>
+                    <span class="text-xs block text-slate-600">Representante Legal / Responsável Técnico</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- MÓDULO 3: PROCESSO GERAL (ECRÃ ÚNICO POR CLIENTE) COM REPLICAÇÃO          -->
+        <!-- ========================================================================= -->
+        <section id="tab-processo-geral" class="tab-pane hidden space-y-5">
+            <!-- Barra de Identificação do Cliente em Foco -->
+            <div class="bg-slate-900 text-white p-4 rounded-xl flex flex-wrap justify-between items-center gap-3 shadow">
+                <div>
+                    <span class="text-[10px] text-amber-400 font-black uppercase tracking-wider block">PROCESSO CONTRATUAL ATIVO:</span>
+                    <h2 id="processo_banner_cliente" class="text-base font-black uppercase text-white">PREFEITURA MUNICIPAL — GESTÃO PCMSO</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="inativarClienteProcesso()" class="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-3 py-1.5 rounded uppercase shadow">
+                        🚫 INATIVAR PROCESSO (MANTER NO HISTÓRICO 20 ANOS)
+                    </button>
+                    <button onclick="salvarTudoProcessoGeral()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-4 py-1.5 rounded uppercase shadow">
+                        💾 SALVAR ALTERAÇÕES
+                    </button>
+                </div>
+            </div>
+
+            <!-- SUBMÓDULO: CADASTRO DO CLIENTE & FISCAIS -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <h3 class="font-extrabold text-xs text-blue-900 uppercase flex items-center gap-1.5 border-b pb-2">
+                    <i data-lucide="building" class="w-4 h-4"></i> 1. DADOS CADASTRAIS DO CLIENTE & GESTÃO DO CONTRATO
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                    <div class="md:col-span-2">
+                        <label class="font-bold text-slate-700 block mb-0.5">RAZÃO SOCIAL *</label>
+                        <input type="text" id="proc_cli_nome" class="w-full border p-1.5 rounded font-bold bg-slate-50" value="PREFEITURA MUNICIPAL">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">CNPJ *</label>
+                        <input type="text" id="proc_cli_cnpj" class="w-full border p-1.5 rounded font-bold bg-slate-50" value="00.000.000/0001-91">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">Nº DO CONTRATO *</label>
+                        <input type="text" id="proc_cli_contrato" class="w-full border p-1.5 rounded font-bold bg-slate-50" value="045/2026">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">NOME DO FISCAL DO CONTRATO</label>
+                        <input type="text" id="proc_fiscal_nome" class="w-full border p-1.5 rounded font-semibold" value="ENG. CARLOS ALBERTO">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">TELEFONE / WHATSAPP DO FISCAL</label>
+                        <input type="text" id="proc_fiscal_tel" class="w-full border p-1.5 rounded" value="(19) 98888-0000">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="font-bold text-slate-700 block mb-0.5">E-MAIL DO FISCAL (ACESSO EXTERNO)</label>
+                        <input type="email" id="proc_fiscal_email" class="w-full border p-1.5 rounded" value="fiscal.contrato@prefeitura.gov.br">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBMÓDULO: GARANTIAS E APÓLICES -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <h3 class="font-extrabold text-xs text-blue-900 uppercase flex items-center gap-1.5 border-b pb-2">
+                    <i data-lucide="shield" class="w-4 h-4"></i> 2. GARANTIA CONTRATUAL & SEGURO
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">TIPO DE GARANTIA</label>
+                        <select class="w-full border p-1.5 rounded font-bold bg-white">
+                            <option value="SEGURO_GARANTIA">SEGURO GARANTIA</option>
+                            <option value="CAUCAO">CAUÇÃO EM DINHEIRO</option>
+                            <option value="FIANCA">FIANÇA BANCÁRIA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">% DE GARANTIA</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-bold text-center" value="5,00 %">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">CORRETORA DE SEGUROS</label>
+                        <input type="text" class="w-full border p-1.5 rounded" value="PORTO SEGUROS">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">CONTATO CORRETORA</label>
+                        <input type="text" class="w-full border p-1.5 rounded" value="DR. MARCOS">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">VALOR DA APÓLICE (R$)</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-bold text-blue-900" value="R$ 1.110,00">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBMÓDULO: PRODUÇÃO, EQUIPE & CRONOGRAMA -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <h3 class="font-extrabold text-xs text-blue-900 uppercase flex items-center gap-1.5 border-b pb-2">
+                    <i data-lucide="hard-hat" class="w-4 h-4"></i> 3. PRODUÇÃO, EQUIPE TÉCNICA E CRONOGRAMA
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">PROFISSIONAL ALOCADO</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-bold" value="DRA. LUIZA SANDONATO">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">QUALIFICAÇÃO</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-semibold" value="MÉDICA DO TRABALHO">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">FORMA DE CONTRATAÇÃO</label>
+                        <select class="w-full border p-1.5 rounded font-bold">
+                            <option value="PJ">PESSOA JURÍDICA (PJ)</option>
+                            <option value="CLT">CLT</option>
+                            <option value="AUTONOMO">AUTÓNOMO / RPA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">PRAZO DE EXECUÇÃO / DIAS</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-bold text-center" value="30 DIAS">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBMÓDULO: FATURAÇÃO E DADOS FISCAIS (CAMPOS MARROM CLARO / GESTOR) -->
+            <div class="bg-amber-50/50 p-4 rounded-xl border border-amber-200 shadow-sm space-y-3">
+                <div class="flex justify-between items-center border-b border-amber-300 pb-2">
+                    <h3 class="font-black text-xs text-amber-950 uppercase flex items-center gap-1.5">
+                        <i data-lucide="lock" class="w-4 h-4 text-amber-800"></i> 4. RELATÓRIO DE FATURAÇÃO & DADOS FISCAIS (RESTRITO AO GESTOR)
+                    </h3>
+                    <span class="text-[10px] font-bold bg-amber-200 text-amber-950 px-2 py-0.5 rounded">EXCLUSIVO GESTOR</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                    <div>
+                        <label class="font-bold block mb-0.5">VALOR DA NOTA FISCAL *</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-black gestor-sigilo-bg" value="R$ 1.850,00">
+                    </div>
+                    <div>
+                        <label class="font-bold block mb-0.5">Nº DA NF-e / NFS-e *</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-bold gestor-sigilo-bg" value="1092">
+                    </div>
+                    <div>
+                        <label class="font-bold block mb-0.5">DATA DE EMISSÃO</label>
+                        <input type="text" class="w-full border p-1.5 rounded text-center font-bold gestor-sigilo-bg" value="01/11/2026">
+                    </div>
+                    <div>
+                        <label class="font-bold block mb-0.5">RETENÇÕES TRIBUTÁRIAS</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-bold text-center gestor-sigilo-bg" value="R$ 212,75">
+                    </div>
+                    <div>
+                        <label class="font-bold block mb-0.5">VALOR LÍQUIDO A RECEBER</label>
+                        <input type="text" class="w-full border p-1.5 rounded font-black gestor-sigilo-bg" value="R$ 1.637,25">
+                    </div>
+                </div>
+
+                <!-- Diretriz Reforma Tributária CBS / IBS -->
+                <div class="mt-3 p-3 bg-white rounded border border-amber-300 space-y-2">
+                    <span class="font-extrabold text-[11px] text-amber-950 uppercase block">APURAÇÃO REFORMA TRIBUTÁRIA (CBS & IBS - LEITURA DIRETA DO XML):</span>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+                        <div>
+                            <label class="font-bold block">ALÍQUOTA CBS (FEDERAL)</label>
+                            <input type="text" class="w-full border p-1 rounded font-bold text-center" value="8,80 %">
+                        </div>
+                        <div>
+                            <label class="font-bold block">VALOR RETIDO CBS</label>
+                            <input type="text" class="w-full border p-1 rounded font-bold text-center text-blue-900" value="R$ 162,80">
+                        </div>
+                        <div>
+                            <label class="font-bold block">ALÍQUOTA IBS (ESTADUAL/MUNICIPAL)</label>
+                            <input type="text" class="w-full border p-1 rounded font-bold text-center" value="17,70 %">
+                        </div>
+                        <div>
+                            <label class="font-bold block">APROVEITAMENTO DE CRÉDITO?</label>
+                            <select class="w-full border p-1 rounded font-bold bg-amber-50">
+                                <option value="SIM">SIM (DESPESA OPERACIONAL)</option>
+                                <option value="NAO">NÃO (USO PESSOAL / NÃO DEDUTÍVEL)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- MÓDULO 4: RELATÓRIO COMERCIAL UNIFICADO EM CASCATA (22 COLUNAS)           -->
+        <!-- ========================================================================= -->
+        <section id="tab-relatorio-comercial" class="tab-pane hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl border shadow-sm flex flex-wrap justify-between items-center gap-2">
+                <div>
+                    <h2 class="font-black text-sm uppercase text-slate-900 flex items-center gap-2">
+                        <i data-lucide="table" class="w-5 h-5 text-emerald-700"></i> RELATÓRIO COMERCIAL EM CASCATA — TODOS OS CLIENTES
+                    </h2>
+                    <p class="text-xs text-slate-500 font-medium">Visualização consolidada de todos os processos e contratos ativos da Boreal.</p>
+                </div>
+                <button onclick="window.print()" class="bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                    <i data-lucide="printer" class="w-4 h-4"></i> IMPRIMIR RELATÓRIO
+                </button>
+            </div>
+
+            <div class="bg-white border rounded-xl overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                        <thead>
+                            <tr class="bg-slate-900 text-white font-bold uppercase tracking-wider">
+                                <th class="p-2 border-r border-slate-700">EDITAL</th>
+                                <th class="p-2 border-r border-slate-700">PROCESSO</th>
+                                <th class="p-2 border-r border-slate-700">PORTAL</th>
+                                <th class="p-2 border-r border-slate-700">DATA PROP.</th>
+                                <th class="p-2 border-r border-slate-700">CLIENTE</th>
+                                <th class="p-2 border-r border-slate-700">CNPJ</th>
+                                <th class="p-2 border-r border-slate-700">ENDEREÇO</th>
+                                <th class="p-2 border-r border-slate-700 text-center">UNIDADES</th>
+                                <th class="p-2 border-r border-slate-700 text-center">EMPREGADOS</th>
+                                <th class="p-2 border-r border-slate-700">DATA CONTRATO</th>
+                                <th class="p-2 border-r border-slate-700">VIGÊNCIA</th>
+                                <th class="p-2 border-r border-slate-700">TIPO</th>
+                                <th class="p-2 border-r border-slate-700">OBJETO</th>
+                                <th class="p-2 border-r border-slate-700 text-center">QTD</th>
+                                <th class="p-2 border-r border-slate-700 text-center">UNID</th>
+                                <th class="p-2 border-r border-slate-700 text-right">VALOR UNIT.</th>
+                                <th class="p-2 border-r border-slate-700 text-right font-black text-amber-400">VALOR TOTAL</th>
+                                <th class="p-2 border-r border-slate-700 text-right">IMP. DIRETO</th>
+                                <th class="p-2 border-r border-slate-700 text-right">CRÉDITO</th>
+                                <th class="p-2 border-r border-slate-700 text-right">IMP. REFLET.</th>
+                                <th class="p-2 border-r border-slate-700 text-right">CUSTO TOTAL</th>
+                                <th class="p-2 border-r border-slate-700 text-right font-black text-emerald-400">SALDO</th>
+                                <th class="p-2 text-center">AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relatorio-comercial-tbody" class="divide-y divide-slate-200 bg-white">
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-2 border-r font-bold">PE 045/26</td>
+                                <td class="p-2 border-r">2026/001</td>
+                                <td class="p-2 border-r">PNCP</td>
+                                <td class="p-2 border-r">28/10/2026</td>
+                                <td class="p-2 border-r font-black text-blue-950">PREFEITURA MUNICIPAL</td>
+                                <td class="p-2 border-r">00.000.000/0001-91</td>
+                                <td class="p-2 border-r">PAULÍNIA - SP</td>
+                                <td class="p-2 border-r text-center font-bold">4</td>
+                                <td class="p-2 border-r text-center font-bold">320</td>
+                                <td class="p-2 border-r">01/11/2026</td>
+                                <td class="p-2 border-r">12 MESES</td>
+                                <td class="p-2 border-r">SERVIÇO</td>
+                                <td class="p-2 border-r font-semibold">GESTÃO PCMSO & ASO</td>
+                                <td class="p-2 border-r text-center font-bold">12</td>
+                                <td class="p-2 border-r text-center font-bold">MÊS</td>
+                                <td class="p-2 border-r text-right font-bold">R$ 1.850,00</td>
+                                <td class="p-2 border-r text-right font-black text-blue-900">R$ 22.200,00</td>
+                                <td class="p-2 border-r text-right">R$ 2.442,00</td>
+                                <td class="p-2 border-r text-right">R$ 380,00</td>
+                                <td class="p-2 border-r text-right">R$ 190,00</td>
+                                <td class="p-2 border-r text-right font-bold text-red-700">R$ 12.000,00</td>
+                                <td class="p-2 border-r text-right font-black text-emerald-700">R$ 7.948,00</td>
+                                <td class="p-2 text-center">
+                                    <button onclick="removerLinhaRelatorioComercial(this)" class="bg-red-100 hover:bg-red-200 text-red-800 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase" title="Remover ao finalizar contrato">
+                                        🗑️ APAGAR
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- MÓDULO 5: OFÍCIOS & CORRESPONDÊNCIAS OFICIAIS                              -->
+        <!-- ========================================================================= -->
+        <section id="tab-oficios" class="tab-pane hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm space-y-4">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <div>
+                        <h2 class="font-black text-sm uppercase text-slate-900 flex items-center gap-2">
+                            <i data-lucide="mail-open" class="w-5 h-5 text-indigo-700"></i> GERADOR DE OFÍCIOS OFICIAIS & COMUNICADOS
+                        </h2>
+                        <p class="text-xs text-slate-500 font-medium">Textos fixos padronizados com campos editáveis de capacidade infinita em fonte Cambria 10pt.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="exportarOficioWord()" class="bg-blue-800 hover:bg-blue-900 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                            <i data-lucide="download" class="w-4 h-4"></i> EXPORTAR WORD (.DOCX)
+                        </button>
+                        <button onclick="window.print()" class="bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                            <i data-lucide="printer" class="w-4 h-4"></i> GERAR PDF OFICIAL
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs bg-slate-50 p-3 rounded-lg border">
+                    <div>
+                        <label class="font-bold block mb-0.5">Nº DO OFÍCIO</label>
+                        <input type="text" id="oficio_numero" class="w-full border p-1.5 rounded font-bold" value="OFÍCIO BOREAL Nº 014/2026">
+                    </div>
+                    <div>
+                        <label class="font-bold block mb-0.5">DESTINATÁRIO (ÓRGÃO / EMPRESA)</label>
+                        <input type="text" id="oficio_destinatario" class="w-full border p-1.5 rounded font-bold" value="SECRETARIA DE ADMINISTRAÇÃO">
+                    </div>
+                    <div>
+                        <label class="font-bold block mb-0.5">ASSUNTO</label>
+                        <input type="text" id="oficio_assunto" class="w-full border p-1.5 rounded font-bold" value="SOLICITAÇÃO DE PRORROGAÇÃO CONTRATUAL">
+                    </div>
+                </div>
+
+                <!-- Folha de Redação do Ofício -->
+                <div class="bg-white border-2 border-slate-300 p-8 max-w-4xl mx-auto doc-cambria space-y-4 shadow-lg text-slate-950">
+                    <div class="border-b-2 border-black pb-2 flex justify-between items-center">
+                        <div>
+                            <strong class="text-base uppercase font-black text-blue-950 block">BOREAL ENGENHARIA E MEDICINA DO TRABALHO</strong>
+                            <span class="text-[11px] font-semibold text-slate-600">Comunicação e Correspondência Oficial</span>
+                        </div>
+                        <div class="text-right">
+                            <strong class="text-xs block" id="oficio_doc_num_lbl">OFÍCIO Nº 014/2026</strong>
+                            <span class="text-[11px] text-slate-500" id="oficio_doc_data_lbl">Paulínia-SP, 01 de Novembro de 2026</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <p><strong>A Sua Senhoria o(a) Senhor(a),</strong></p>
+                        <p class="font-bold uppercase" id="oficio_doc_dest_lbl">SECRETÁRIO MUNICIPAL DE ADMINISTRAÇÃO</p>
+                        <p>PREFEITURA MUNICIPAL</p>
+                    </div>
+
+                    <p><strong>Assunto:</strong> <span id="oficio_doc_ass_lbl" class="font-bold uppercase">SOLICITAÇÃO DE PRORROGAÇÃO CONTRATUAL</span></p>
+
+                    <p>Prezado(a) Senhor(a),</p>
+
+                    <!-- Área de Conteúdo Livre de Capacidade Infinita -->
+                    <div class="my-2">
+                        <textarea id="oficio_corpo_texto" rows="10" class="w-full border p-2 rounded doc-cambria bg-slate-50 focus:bg-white" placeholder="DIGITE OU DITE O TEXTO DO OFÍCIO AQUI...">Cumprimentando-o cordialmente, vimos por meio deste instrumento expor e requerer o que segue adiante com relação à execução das metas contratuais...</textarea>
+                    </div>
+
+                    <p>Certos de contar com vossa costumeira atenção, renovamos nossos protestos de elevada estima e consideração.</p>
+
+                    <div class="pt-8 text-center space-y-1">
+                        <div class="w-64 border-b border-slate-900 mx-auto"></div>
+                        <strong class="block font-bold uppercase">BOREAL ENGENHARIA E MEDICINA DO TRABALHO LTDA</strong>
+                        <span class="text-xs text-slate-600 block">Diretoria Operacional</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- MÓDULO 6: ENTRADA EXTERNA PARA COTAÇÃO PÚBLICA (ACESSO LIVRE SIMPLES)      -->
+        <!-- ========================================================================= -->
+        <section id="tab-cotacao-publica" class="tab-pane hidden space-y-4">
+            <div class="bg-white p-6 rounded-xl border border-amber-300 shadow-md max-w-4xl mx-auto space-y-4">
+                <div class="border-b pb-3 text-center">
+                    <span class="bg-amber-100 text-amber-900 font-extrabold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider">PORTAL PÚBLICO EXTERNO</span>
+                    <h2 class="font-black text-lg text-slate-900 uppercase mt-1">SOLICITAÇÃO DE COTAÇÃO DE PREÇOS — BOREAL ENGMED</h2>
+                    <p class="text-xs text-slate-500">Acesso simplificado para órgãos públicos e compradores privados formularem orçamentos estimativos.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-lg border">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">SEU E-MAIL INSTITUCIONAL *</label>
+                        <input type="email" id="externo_email" placeholder="seu.email@orgao.gov.br" class="w-full border p-2 rounded font-bold bg-white">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-0.5">ÓRGÃO OU EMPRESA SOLICITANTE *</label>
+                        <input type="text" id="externo_orgao" placeholder="NOME DO ÓRGÃO OU EMPRESA" class="w-full border p-2 rounded font-bold bg-white">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="font-bold text-slate-700 block mb-0.5">CIDADE / ESTADO ONDE O SERVIÇO SERÁ PRESTADO *</label>
+                        <input type="text" id="externo_local" placeholder="CIDADE - UF" class="w-full border p-2 rounded font-bold bg-white">
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <span class="font-bold text-xs uppercase text-slate-800">RELAÇÃO DE ITENS E SERVIÇOS DEMANDADOS:</span>
+                    <table class="w-full border text-xs">
+                        <thead class="bg-slate-200 font-bold uppercase">
+                            <tr>
+                                <th class="p-2 text-left">SERVIÇO / PRODUTO DESEJADO</th>
+                                <th class="p-2 w-28 text-center">QUANTIDADE</th>
+                                <th class="p-2 w-32 text-center">UNIDADE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="externo-itens-tbody">
+                            <tr class="border-b">
+                                <td class="p-2"><input type="text" class="w-full border p-1 rounded" placeholder="EX: AVALIAÇÃO DE RUÍDO OU ASO"></td>
+                                <td class="p-2 text-center"><input type="number" class="w-20 border p-1 text-center font-bold" value="1"></td>
+                                <td class="p-2 text-center">
+                                    <select class="border p-1 rounded font-bold">
+                                        <option value="UNIDADE">UNIDADE</option>
+                                        <option value="MÊS">MÊS</option>
+                                        <option value="HORA">HORA</option>
+                                        <option value="LAUDO">LAUDO</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pt-2 text-center">
+                    <button onclick="enviarCotacaoExterna()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm px-6 py-2.5 rounded shadow-lg uppercase">
+                        🚀 ENVIAR SOLICITAÇÃO DE COTAÇÃO
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- RODAPÉ INSTITUCIONAL -->
+    <footer class="bg-slate-900 text-slate-400 text-xs py-3 border-t border-slate-800 text-center font-medium">
+        BOREAL ENGENHARIA E MEDICINA DO TRABALHO LTDA &copy; 2026 — SISTEMA INTEGRADO DE GESTÃO EMPRESARIAL
+    </footer>
+
+    <!-- SCRIPT DE NAVEGAÇÃO E RECONHECIMENTO DE VOZ -->
+    <script>
+        // Inicialização de Ícones Lucide
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) { lucide.createIcons(); }
+        });
+
+        // Alternador de Abas do Sistema
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            const target = document.getElementById('tab-' + tabId);
+            if (target) target.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-700', 'text-white');
+                btn.classList.add('text-slate-300');
+            });
+            const activeBtn = document.getElementById('btn-tab-' + tabId);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-blue-700', 'text-white');
+                activeBtn.classList.remove('text-slate-300');
+            }
+            if (window.lucide) { lucide.createIcons(); }
+        }
+
+        // Reconhecimento de Voz (Web Speech API)
+        function ativarGravacaoVoz(inputId) {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert("O seu navegador não suporta reconhecimento de voz.");
+                return;
+            }
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.start();
+
+            recognition.onresult = function(event) {
+                const text = event.results[0][0].transcript;
+                const field = document.getElementById(inputId);
+                if (field) field.value = text.toUpperCase();
+            };
+        }
+
+        // Regra do Botão Apagar Processo
+        function verificarStatusProcesso(status) {
+            const btnApagar = document.getElementById('btn-apagar-processo');
+            if (status === 'SEM_EXITO') {
+                btnApagar.classList.remove('hidden');
+            } else {
+                btnApagar.classList.add('hidden');
+            }
+        }
+
+        function removerLinhaRelatorioComercial(btn) {
+            if (confirm("Deseja realmente apagar esta linha do relatório comercial referente ao contrato concluído?")) {
+                const row = btn.closest('tr');
+                if (row) row.remove();
+            }
+        }
+
+        function removerProcessoVenda() {
+            if (confirm("Confirmar exclusão deste processo com status 'Sem Êxito'?")) {
+                alert("Processo removido da matriz com sucesso!");
+            }
+        }
+
+        function carregarProcessoClienteUnico(codigo) {
+            if (!codigo) return;
+            const banner = document.getElementById('processo_banner_cliente');
+            if (banner) banner.textContent = codigo.replace('_', ' ');
+            switchTab('processo-geral');
+        }
+
+        function realizarLogout() {
+            if (confirm("Deseja encerrar a sessão de trabalho?")) {
+                window.location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
